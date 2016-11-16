@@ -421,6 +421,14 @@ fn get_rocksdb_raftlog_cf_option(matches: &Matches, config: &toml::Value) -> Roc
     get_rocksdb_cf_option(matches, config, "raftcf", 256 * 1024 * 1024, false)
 }
 
+fn get_rocksdb_key_cf_option(matches: &Matches, config: &toml::Value) -> RocksdbOptions {
+    get_rocksdb_cf_option(matches,
+                          config,
+                          "keycf",
+                          256 * 1024 * 1024,
+                          true /* bloom filter */)
+}
+
 fn get_rocksdb_lock_cf_option() -> RocksdbOptions {
     let mut opts = RocksdbOptions::new();
     let mut block_base_opts = BlockBasedOptions::new();
@@ -628,7 +636,8 @@ fn build_raftkv(matches: &Matches,
     let cfs_opts = vec![get_rocksdb_default_cf_option(matches, config),
                         get_rocksdb_lock_cf_option(),
                         get_rocksdb_write_cf_option(matches, config),
-                        get_rocksdb_raftlog_cf_option(matches, config)];
+                        get_rocksdb_raftlog_cf_option(matches, config),
+                        get_rocksdb_key_cf_option(matches, config)];
     let mut db_path = path.clone();
     db_path.push("db");
     let engine =
