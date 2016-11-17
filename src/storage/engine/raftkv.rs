@@ -95,7 +95,7 @@ pub struct RaftKv<S: RaftStoreRouter + 'static> {
 
 enum CmdRes {
     Resp(Vec<Response>),
-    Snap(RegionSnapshot),
+    Snap((RegionSnapshot, u64)),
 }
 
 fn on_result(mut resp: RaftCmdResponse,
@@ -119,7 +119,7 @@ fn on_result(mut resp: RaftCmdResponse,
         return Ok(CmdRes::Resp(resps.into_vec()));
     }
     let snap = RegionSnapshot::from_raw(db, resps[0].take_snap().take_region());
-    Ok(CmdRes::Snap(snap))
+    Ok(CmdRes::Snap((snap, resp.get_header().get_current_term())))
 }
 
 impl<S: RaftStoreRouter> RaftKv<S> {
@@ -237,7 +237,7 @@ impl<S: RaftStoreRouter> Engine for RaftKv<S> {
         ASYNC_REQUESTS_COUNTER_VEC.with_label_values(&["snapshot", "all"]).inc();
         let req_timer = ASYNC_REQUESTS_DURATIONS_VEC.with_label_values(&["snapshot"]).start_timer();
 
-        let ctx2 = ctx.clone();
+        let mut ctx2 = ctx.clone();
 
         try!(self.exec_requests(ctx,
                                 vec![req],
@@ -246,9 +246,10 @@ impl<S: RaftStoreRouter> Engine for RaftKv<S> {
                 Ok(CmdRes::Resp(r)) => {
                     cb(Err(invalid_resp_type(CmdType::Snap, r[0].get_cmd_type()).into()))
                 }
-                Ok(CmdRes::Snap(s)) => {
+                Ok(CmdRes::Snap((s, term))) => {
                     req_timer.observe_duration();
                     ASYNC_REQUESTS_COUNTER_VEC.with_label_values(&["snapshot", "success"]).inc();
+                    ctx2.set_term(term);
                     cb(Ok(box RaftKvSnapshot {
                         region_snapshot: s,
                         context: ctx2,
