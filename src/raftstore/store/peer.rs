@@ -170,6 +170,13 @@ fn notify_region_removed(region_id: u64, peer_id: u64, mut cmd: PendingCmd) {
     cmd.call(resp);
 }
 
+pub struct ConsistencyState {
+    pub last_check_time: Instant,
+    // (computed_result_or_to_be_revified, index, hash)
+    pub index: u64,
+    pub hash: Vec<u8>,
+}
+
 pub struct Peer {
     engine: Arc<DB>,
     peer_cache: Rc<RefCell<HashMap<u64, metapb::Peer>>>,
@@ -188,7 +195,7 @@ pub struct Peer {
     /// delete keys' count since last reset.
     pub delete_keys_hint: u64,
 
-    pub last_consistency_check_time: Instant,
+    pub consistency_state: ConsistencyState,
 
     leader_missing_time: Option<Instant>,
 
@@ -281,7 +288,11 @@ impl Peer {
             leader_missing_time: Some(Instant::now()),
             tag: tag,
             last_compacted_idx: 0,
-            last_consistency_check_time: Instant::now(),
+            consistency_state: ConsistencyState {
+                last_check_time: Instant::now(),
+                index: INVALID_INDEX,
+                hash: vec![],
+            },
         };
 
         peer.load_all_coprocessors();
